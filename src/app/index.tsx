@@ -1,6 +1,9 @@
+import ChatBubble from "@/component/ChatBubble";
 import { initLlama, type LlamaContext } from "llama.rn";
 import { useEffect, useState } from "react";
-import { Alert, Button, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Button, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import ChatInput from "../component/ChatInput";
 
 const MODEL_PATH =
   "/data/user/0/com.akshita_thakur.PocketMind/files/models/qwen2.5-1.5b-instruct-q3_k_m.gguf";
@@ -70,26 +73,40 @@ export default function HomeScreen() {
     loadModel();
   }, []);
   return (
-    <View style={{ flex: 1, padding: 24, justifyContent: "center" }}>
-      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 16 }}>
-        PocketMind
-      </Text>
+    <SafeAreaView style={{ flex: 1 }}>
+      <View style={{ flex: 1, padding: 24, justifyContent: "center" }}>
+        <Text className="text-blue-600 text-3xl">PocketMind</Text>
 
-      <Text style={{ marginBottom: 16 }}>{status}</Text>
+        <Text style={{ marginBottom: 16 }}>{status}</Text>
 
-      {loadTime !== null && (
-        <Text style={{ marginBottom: 16 }}>
-          Model load time: {(loadTime / 1000).toFixed(2)} seconds
-        </Text>
-      )}
-
-      <View>
-        <Button
-          title={busy ? "Generating..." : "Test Inference"}
-          onPress={testInference}
-          disabled={busy || context === null}
+        {loadTime !== null && (
+          <Text style={{ marginBottom: 16 }}>
+            Model load time: {(loadTime / 1000).toFixed(2)} seconds
+          </Text>
+        )}
+        <ChatBubble
+          message="Hello! Welcome to PocketMind. How can I help you?"
+          role="assistant"
         />
+
+        <ChatBubble message="What is artificial intelligence?" role="user" />
+        {busy && (
+          <View className="flex-row items-center gap-2 mb-4">
+            <ActivityIndicator size="small" color="#2563eb" />
+            <Text className="text-gray-500 text-sm">
+              PocketMind is thinking...
+            </Text>
+          </View>
+        )}
+        <View>
+          <Button
+            title={busy ? "Generating..." : "Test Inference"}
+            onPress={testInference}
+            disabled={busy || context === null}
+          />
+        </View>
       </View>
-    </View>
+      <ChatInput />
+    </SafeAreaView>
   );
 }
