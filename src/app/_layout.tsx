@@ -10,6 +10,13 @@ export default function RootLayout() {
           headerShown: true,
         }}
       />
+      <Stack.Screen
+        name="chat"
+        options={{
+          title: "Chat",
+          headerShown: true,
+        }}
+      />
     </Stack>
   );
 }

@@ -1,107 +1,115 @@
-import { initLlama, type LlamaContext } from "llama.rn";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Text, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
+import { Alert, FlatList, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import ChatBubble from "../component/ChatBubble";
-import ChatInput from "../component/ChatInput";
+import {
+  deleteConversation,
+  getAllConversations,
+  type Conversation,
+} from "../storage/ChatRepository";
 
-const MODEL_PATH =
-  "/data/user/0/com.akshita_thakur.PocketMind/files/models/qwen2.5-1.5b-instruct-q3_k_m.gguf";
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
+const ChatHistory = () => {
+  const router = useRouter();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default function HomeScreen() {
-  const [loadTime, setLoadTime] = useState<number | null>(null);
-  const [context, setContext] = useState<LlamaContext | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [question, setQuestion] = useState<string>("");
-  const [answer, setAnswer] = useState<string>("");
-  const [conversation, setConversation] = useState<Message[]>([]);
-
-  async function loadModel() {
-    if (context || busy) return;
-
-    setBusy(true);
-    const start = Date.now();
-
+  const loadConversations = async () => {
     try {
-      const loadedContext = await initLlama({
-        model: MODEL_PATH,
-        n_ctx: 1024,
-        n_threads: 4,
-        use_mmap: true,
-      });
-
-      setContext(loadedContext);
-      setLoadTime(Date.now() - start);
+      const data = await getAllConversations();
+      setConversations(data);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      Alert.alert("Model load failed", message);
+      console.error("Failed to load conversations:", error);
+      Alert.alert("Error", "Could not load conversations.");
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
-  }
+  };
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadConversations();
+    }, []),
+  );
 
-  async function testInference(message: string) {
-    if (!context || busy) return;
-    setAnswer("");
-    setBusy(true);
-
-    const start = Date.now();
-
-    try {
-      const result = await context.completion(
-        {
-          prompt: `You are PocketMind, a helpful assistant. User: ${message} Answer in 2 short sentences. Assistant:`,
-          n_predict: 100,
-          temperature: 0.7,
-        },
-        (data) => {
-          setAnswer((prev) => prev + data.token);
-        },
-      );
-
-      console.log("LLM performance:", JSON.stringify(result.timings));
-      const elapsed = (Date.now() - start) / 1000;
-      setAnswer(`Response (${elapsed.toFixed(2)} seconds):\n${result.text}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const handleSend = (message: string) => {
-    if (!message.trim() || busy || !context) return;
-    setQuestion(message);
-    testInference(message);
+  const openNewChat = () => {
+    router.push("/chat");
   };
 
-  useEffect(() => {
-    loadModel();
-  }, []);
+  const openConversation = (id: string) => {
+    router.push({
+      pathname: "/chat",
+      params: { conversationId: id },
+    });
+  };
+  const handleDeleteConversation = (id: string, title: string) => {
+    Alert.alert(
+      "Delete Conversation",
+      `Are you sure you want to delete "${title}" Conversation ? This action cannot be undone.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteConversation(id);
+              await loadConversations();
+            } catch (error) {
+              console.error("Failed to delete conversation:", error);
+              Alert.alert("Error", "Could not delete conversation.");
+            }
+          },
+        },
+      ],
+    );
+  };
   return (
-    <SafeAreaView className="flex-1 px-2">
-      <View className="flex-1 p-6 ">
-        {question && <ChatBubble message={question} role="user" />}
-        {answer && <ChatBubble message={answer} role="assistant" />}
-        {/* {loadTime !== null && (
-          <Text style={{ marginBottom: 16 }}>
-            Model load time: {(loadTime / 1000).toFixed(2)} seconds
-          </Text>
-        )} */}
-        <View></View>
-        {busy && (
-          <View className="flex-row gap-2">
-            <ActivityIndicator size="small" color="blue" />
-            <Text>PocketMind is thinking...</Text>
-          </View>
-        )}
-      </View>
-      <ChatInput onSend={handleSend} disabled={busy || context === null} />
+    <SafeAreaView className="flex-1 px-4">
+      <Pressable
+        onPress={openNewChat}
+        className="bg-blue-600 rounded-xl p-4 my-4"
+      >
+        <Text className="text-white text-center font-bold">+ New Chat</Text>
+      </Pressable>
+      {loading ? (
+        <Text className="text-center mt-6">Loading conversations...</Text>
+      ) : conversations.length === 0 ? (
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-lg font-semibold">No conversations yet</Text>
+          <Text className="text-gray-500 mt-2">Start a new chat to begin.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={conversations}
+          keyExtractor={(item) => item.id}
+
+          renderItem={({ item }) => (
+            <View className="flex-row items-center border-b border-gray-200 py-4">
+              <Pressable
+                onPress={() => openConversation(item.id)}
+                className="flex-1"
+              >
+                <Text className="font-semibold text-base">{item.title}</Text>
+
+                <Text className="text-gray-500 text-xs mt-1">
+                  {new Date(item.updated_at).toLocaleString()}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleDeleteConversation(item.id, item.title)}
+                className="bg-red-100 rounded-lg px-3 py-2 ml-3"
+              >
+                <Text className="text-red-600 font-semibold">Delete</Text>
+              </Pressable>
+            </View>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
-}
+};
+export default ChatHistory;
